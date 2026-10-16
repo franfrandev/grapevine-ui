@@ -1,8 +1,8 @@
 import { build } from 'esbuild'
 
 build({
-  entryPoints: ['./src/index.js'],
-  outfile: './dist/index.js',
+  entryPoints: ['./src/index.ts', './src/worker.ts'],
+  outfile: './dist/index.ts',
   sourcemap: 'inline',
   minify: false,
   bundle: true,
