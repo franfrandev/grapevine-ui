@@ -3,7 +3,7 @@ const FRAME_SIZE = 960
 const TARGET_RATE = 48000
 const LOOK_AHEAD = 0.5
 
-export function playAudio(ctx: AudioContext, timeObj: { time: number }, decodedPackets: [Float32Array]) {
+export function playAudio(ctx: AudioContext, timeObj: { time: number }, decodedPackets: Float32Array[]) {
     if (!timeObj.time)
         timeObj.time = ctx.currentTime + LOOK_AHEAD
 

@@ -1,25 +1,27 @@
 // @ts-check
-import {createLibp2p} from 'libp2p'
 import type {Libp2p} from 'libp2p'
+import {createLibp2p} from 'libp2p'
 import {identify, type Identify} from '@libp2p/identify'
 import {noise} from '@chainsafe/libp2p-noise'
 import {yamux} from '@chainsafe/libp2p-yamux'
 import {multiaddr} from '@multiformats/multiaddr'
 import {WebRTC} from '@multiformats/multiaddr-matcher'
-import {gossipsub, type GossipSub} from '@libp2p/gossipsub'
+import {gossipsub, type GossipSub, type Message, type SignedMessage} from '@libp2p/gossipsub'
 import {webSockets} from '@libp2p/websockets'
 import {webTransport} from '@libp2p/webtransport'
 import {webRTC, webRTCDirect} from '@libp2p/webrtc'
-import {enable, disable, logger} from '@libp2p/logger'
+import {enable, logger} from '@libp2p/logger'
 import {uint8ArrayStartsWith, update} from './tmp_utils'
 import {bootstrap} from '@libp2p/bootstrap'
-import {decodePacketMessage, deserializePeers} from './message'
+import {decodePacketMessage, deserializePeers, type MetadataMessage} from './message'
 import {RtpPacket} from "rtp.js/packets";
 import {playAudio} from "./audio";
 import {JitterBuffer} from "./jitter_buffer";
 import {circuitRelayTransport} from '@libp2p/circuit-relay-v2'
 import stations from './stations.json'
-import {GET_PEERS_PROTOCOL} from "./constants";
+import {GET_PEERS_PROTOCOL, HELLO_PROTOCOL} from "./constants";
+import {ConnectionStatus} from "./connection_status";
+import type {Connection, Stream, StreamMessageEvent} from "@libp2p/interface"
 
 interface AudioState {
     ctx: AudioContext,
@@ -37,8 +39,8 @@ export class WebPeer {
         gossipsub: GossipSub
         identify: Identify
     }>
-    log = logger('libp2p:webpeer-app')
-    audioState: AudioState = {
+    private log = logger('libp2p:webpeer-app')
+    private audioState: AudioState = {
         ctx: new AudioContext(),
         time: {time: null},
         jitterBuffer: new JitterBuffer(),
@@ -46,8 +48,9 @@ export class WebPeer {
         sourcePeerId: '',
         currentlyPlaying: ''
     }
-    currentConnectionState: string = ""
-    DOMCurrentlyPlaying: HTMLElement
+    currentConnectionState: ConnectionStatus = new ConnectionStatus()
+    private readonly DOMCurrentlyPlaying: HTMLElement
+    private latestMetadataPacket: Uint8Array;
 
     constructor(libp2p: Libp2p<{
         gossipsub: GossipSub
@@ -58,20 +61,67 @@ export class WebPeer {
 
         this.libp2p.addEventListener('peer:discovery', async (evt) => this.discoverPeer(evt))
 
-        this.libp2p.services.gossipsub.addEventListener('message', (evt: any) => this.receiveGossipSubMessage(evt))
+        this.libp2p.addEventListener('connection:open', async (evt) => this.handleConnectPeer(evt))
+
+        this.libp2p.services.gossipsub.addEventListener('message', (evt) => this.receiveGossipSubMessage(evt))
+
+        this.libp2p.handle(HELLO_PROTOCOL, this.handleHelloProtocol.bind(this))
 
         setInterval(() => this.checkConnectionState(), 1000)
+    }
+
+    async handleHelloProtocol(stream: Stream, connection: Connection) {
+        stream.addEventListener('message', (evt: StreamMessageEvent) => {
+            this.log("handleConnectPeer: received data")
+            // TODO check source is streamer
+            const packet = evt.data.slice()
+            const maybePacketMessage = decodePacketMessage(packet);
+            if (maybePacketMessage == null) {
+                this.log("handleConnectPeer: received invalid packet")
+                return
+            }
+            if (!("metadata" in maybePacketMessage)) {
+                this.log("handleConnectPeer: received invalid packet")
+                return
+            }
+            this.updateMetadata(maybePacketMessage, packet)
+        }, {once: true, signal: AbortSignal.timeout(5000)})
+    }
+
+    async handleConnectPeer(evt: CustomEvent<Connection>) {
+        const conn = evt.detail
+        if (conn == null) {
+            this.log("handleConnectPeer: no connection found")
+            return
+        }
+        if (WebRTC.exactMatch(conn.remoteAddr)) {
+            // this.currentConnectionState.setWaitingForRTPPackets()
+            // TODO: if inbound, potentially open a stream to send our latest metadata.
+            this.log("handleConnectPeer: WebRTC connection")
+            const stream = await this.libp2p.dialProtocol(conn.remotePeer, HELLO_PROTOCOL,
+                {
+                    signal: AbortSignal.timeout(5000)
+                })
+
+            // in case you missed it...
+            stream.send(this.latestMetadataPacket)
+        }
     }
 
     checkConnectionState() {
         const conns = this.libp2p.getConnections();
 
-        if (this.currentConnectionState == "OK") return
+        // OK
+        if (this.currentConnectionState.code == 3) return
+
+        if (this.libp2p.getMultiaddrs().length == 0) {
+            this.currentConnectionState.setNoMultiaddrs()
+        }
 
         if (conns.find((conn) => WebRTC.exactMatch(conn.remoteAddr))) {
-            this.currentConnectionState = "Waiting for RTP packets"
+            this.currentConnectionState.setWaitingForRTPPackets()
         } else {
-            this.currentConnectionState = "Not connected to WebRTC peers"
+            this.currentConnectionState.setWaitingForWebRTCPeers()
         }
     }
 
@@ -90,7 +140,7 @@ export class WebPeer {
         }
 
         this.audioState = {
-            ctx: new AudioContext(), time: {time: null}, jitterBuffer: new JitterBuffer(), worker: worker, // @ts-ignore
+            ctx: new AudioContext(), time: {time: null}, jitterBuffer: new JitterBuffer(), worker: worker,
             sourcePeerId: stations[topic].peerId, currentlyPlaying: currentlyPlaying
         }
 
@@ -98,13 +148,11 @@ export class WebPeer {
         document.addEventListener('touchend', this.fixAudioContext)
 
         worker.addEventListener('message', (e) => {
-            // @ts-ignore
             let jitterBuffer = this.audioState.jitterBuffer
             // console.debug("Received decoded", e.data.length);
             jitterBuffer.push(e.data)
             const maybe_buf = jitterBuffer.pop()
             if (maybe_buf) {
-                // @ts-ignore
                 playAudio(this.audioState.ctx, this.audioState.time, maybe_buf);
             }
         });
@@ -142,7 +190,7 @@ export class WebPeer {
             return
         }
 
-        const stream = await this.libp2p.dialProtocol(multiaddr(relayMultiAddr), GET_PEERS_PROTOCOL,
+        const stream = await this.libp2p.dialProtocol(relayMultiAddr, GET_PEERS_PROTOCOL,
             {
                 signal: AbortSignal.timeout(5_000)
             }
@@ -161,11 +209,7 @@ export class WebPeer {
             }
         }, {once: true})
 
-        if (myMultiAddr == null) {
-            stream.send(new Uint8Array())
-        } else {
-            stream.send(myMultiAddr.bytes)
-        }
+        stream.send(myMultiAddr.bytes)
         await stream.close({signal: AbortSignal.timeout(5_000)})
     }
 
@@ -181,21 +225,21 @@ export class WebPeer {
         }
     }
 
-    receiveGossipSubMessage(evt: any) {
+    receiveGossipSubMessage(evt: CustomEvent<Message>) {
         if (!this.audioState.time) {
             return;
         }
 
-        this.currentConnectionState = "Receiving unauthenticated RTP packet"
-
-        if (evt.detail.from.toString() !== this.audioState.sourcePeerId.toString()) {
-            this.log("Received RTP packet from unexpected peer", evt.detail.from.toString());
+        const evtDetail = evt.detail as SignedMessage
+        if (evtDetail.from.toString() !== this.audioState.sourcePeerId.toString()) {
+            this.log("Received RTP packet from unexpected peer", evtDetail.from.toString());
             return;
         }
 
-        this.currentConnectionState = "OK"
+        this.currentConnectionState.setOK();
 
-        const maybePacketMessage = decodePacketMessage(evt.detail.data);
+        const rawPacket = evtDetail.data;
+        const maybePacketMessage = decodePacketMessage(rawPacket);
         if (maybePacketMessage) {
             if ("data" in maybePacketMessage) {
                 const data = maybePacketMessage.data;
@@ -207,6 +251,10 @@ export class WebPeer {
                 const enc = new TextEncoder();
                 const opusHead = enc.encode("OpusHead");
                 const opusTags = enc.encode("OpusTags");
+                if (uint8ArrayStartsWith(payloadArr, opusHead) || uint8ArrayStartsWith(payloadArr, opusTags)) {
+                    const dec = new TextDecoder();
+                    this.log("Received RTP packet with OpusHead or OpusTags", dec.decode(payloadArr));
+                }
                 const worker = this.audioState.worker;
                 if (!worker) return;
                 if (payload.byteLength === 0 || uint8ArrayStartsWith(payloadArr, opusHead) || uint8ArrayStartsWith(payloadArr, opusTags)) {
@@ -217,13 +265,17 @@ export class WebPeer {
                 }
                 worker.postMessage(payloadArr);
             } else if ("metadata" in maybePacketMessage) {
-                this.log("New metadata:", maybePacketMessage.metadata);
-                const currentlyPlaying = maybePacketMessage.metadata;
-                this.audioState.currentlyPlaying = currentlyPlaying;
-                // @ts-ignore
-                update(DOMCurrentlyPlaying, currentlyPlaying)
+                this.updateMetadata(maybePacketMessage, rawPacket)
             }
         }
+    }
+
+    updateMetadata(metadataPacket: MetadataMessage, rawPacket: Uint8Array) {
+        this.log("New metadata:", metadataPacket.metadata);
+        const currentlyPlaying = metadataPacket.metadata;
+        this.audioState.currentlyPlaying = currentlyPlaying;
+        this.latestMetadataPacket = rawPacket;
+        update(this.DOMCurrentlyPlaying, currentlyPlaying)
     }
 }
 
@@ -278,18 +330,18 @@ const App = async () => {
     update(DOM.nodePeerId(), libp2p.peerId.toString())
 
     setInterval(() => {
-        update(DOM.connectionStatus(), webapp.currentConnectionState)
+        update(DOM.connectionStatus(), webapp.currentConnectionState.message)
     }, 1000)
 
     setInterval(() => {
         webapp.checkPeersCount()
     }, 2000)
 
-    // @ts-ignore
     DOM.connectButton().onclick = async (e) => {
         e.preventDefault()
-        // @ts-ignore
-        let maddr = multiaddr(DOM.inputMultiaddr().value)
+        const inputEl = DOM.inputMultiaddr()
+        const inputMultiaddr = inputEl as HTMLInputElement
+        let maddr = multiaddr(inputMultiaddr.value)
 
         console.debug(maddr)
         try {

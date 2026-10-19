@@ -5,7 +5,7 @@ export class JitterBuffer {
         this.buffer.push(data)
     }
 
-    pop() {
+    pop(): Float32Array[] {
         if (this.buffer.length > 200) {
             const ret = [];
             for (let i = 0; i < 100; i++) {
