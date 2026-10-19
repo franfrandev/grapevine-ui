@@ -30,7 +30,7 @@ interface AudioState {
     currentlyPlaying: string
 }
 
-const relayMultiAddr = multiaddr("/ip6/fd7a:115c:a1e0::7a3a:5b36/udp/9001/webrtc-direct/certhash/uEiC8LYX0zA3wBB5ipRpZagZWXW_wLOknf3lafvOc9BkwdA/p2p/12D3KooWJjs84sXc4D68Cs3uxsFcdTrittedsMfuVUspHbVDsYbf")
+const relayMultiAddr = multiaddr("/ip4/176.97.117.238/udp/9001/webrtc-direct/certhash/uEiBe_iQyp9K6lCiUFcWk1tsNOwsRgJFfH7yTarASh9zx_w/p2p/12D3KooWRsM61hZDp41qhFcTLmWAwjx32ayYcvJ5kcRsj6LxadeL")
 
 export class WebPeer {
     libp2p: Libp2p<{
@@ -62,7 +62,7 @@ export class WebPeer {
             try {
                 await libp2p.dial(maddrs) // dial the new peer
             } catch (err) {
-                console.error(`Failed to dial peer (${evt.detail.id.toString()}):`, err)
+                console.debug(`Failed to dial peer (${evt.detail.id.toString()}):`, err)
             }
         })
 
@@ -128,6 +128,9 @@ export class WebPeer {
             sourcePeerId: stations[topic].peerId, currentlyPlaying: currentlyPlaying
         }
 
+        document.addEventListener('touchstart', this.fixAudioContext)
+        document.addEventListener('touchend', this.fixAudioContext)
+
         worker.addEventListener('message', (e) => {
             // @ts-ignore
             let jitterBuffer = this.audioState.jitterBuffer
@@ -139,6 +142,21 @@ export class WebPeer {
                 playAudio(this.audioState.ctx, this.audioState.time, maybe_buf);
             }
         });
+    }
+
+    async fixAudioContext() {
+        // Create empty buffer
+        const buffer = this.audioState.ctx.createBuffer(1, 1, 22050);
+        const source = this.audioState.ctx.createBufferSource();
+        source.buffer = buffer;
+        // Connect to output (speakers)
+        source.connect(this.audioState.ctx.destination);
+        // Play sound
+        source.start(0);
+        await this.audioState.ctx.resume()
+        // Remove events
+        document.removeEventListener('touchstart', this.fixAudioContext);
+        document.removeEventListener('touchend', this.fixAudioContext);
     }
 
     async checkPeersCount() {
@@ -169,7 +187,11 @@ export class WebPeer {
             this.log('Received peers', peers)
             for (const peer of peers) {
                 if (!WebRTC.exactMatch(peer)) continue
-                await this.libp2p.dial(peer)
+                try {
+                    await this.libp2p.dial(peer)
+                } catch (err) {
+                    console.debug(`Failed to dial peer (${peer.toString()}):`, err)
+                }
             }
         }, {once: true})
 
@@ -203,7 +225,6 @@ const App = async () => {
         peerDiscovery: [
             bootstrap({
                 list: [
-                    // '/ip6/fe80::32c5:99ff:feac:58d2/udp/36688/webrtc-direct/certhash/uEiDd9M1SGBCtA-QHolqGVKoGTN5Jh8pd8_7IPtEPNJ7Eug'
                     relayMultiAddr.toString()
                 ],
             }),
@@ -234,6 +255,8 @@ const App = async () => {
     const webapp = new WebPeer(libp2p, DOM.currentlyPlaying())
     await webapp.playRadio()
 
+    globalThis.libp2p = libp2p
+
     update(DOM.nodePeerId(), libp2p.peerId.toString())
     update(DOM.nodeStatus(), 'Online')
 
@@ -257,7 +280,8 @@ const App = async () => {
 
         console.debug(maddr)
         try {
-            await libp2p.dial(maddr)
+            const conn = await libp2p.dial(maddr)
+            console.debug(`Dialing ${maddr.toString()} successful`)
         } catch (e) {
             console.error(e)
         }
