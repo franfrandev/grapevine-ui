@@ -15,39 +15,10 @@
       <section class="my-4">
         <h2 class="font-bold text-xl text-blue-600 mb-2">Node</h2>
         <div class="container mx-auto p-6 bg-white shadow-md rounded-lg mt-10">
-          <label for="listen-on">Listen on:</label>
-          <span id="listen-on"></span>
-          <label for="topic">Selected station:</label>
-          <select name="topic" id="topic">
-            <option value="rock-it">rock-it</option>
-          </select>
-          <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded inline-flex items-center"
-                  id="topic-button">
-            <svg class="fill-current w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-              <polygon class="play-btn__svg" points="9.33 6.69 9.33 19.39 19.3 13.04 9.33 6.69"/>
-              <path class="play-btn__svg"
-                    d="M26,13A13,13,0,1,1,13,0,13,13,0,0,1,26,13ZM13,2.18A10.89,10.89,0,1,0,23.84,13.06,10.89,10.89,0,0,0,13,2.18Z"/>
-            </svg>
-            <span>Play</span>
-          </button>
           <label for="currently-playing">Currently playing:</label>
           <span id="currently-playing"></span>
         </div>
       </section>
-
-      <ul class="list-disc list-inside mb-6">
-        <li>
-          Opened sessions in the last <span id="output-webtransport-opened-per-unit">0s</span>:
-          <span id="output-webtransport-opened-per-minute">0</span>
-        </li>
-        <li>
-          Max opened connections per minute: <span id="output-webtransport-max-opened-per-minute">0</span>
-        </li>
-        <li>
-          <button id="button-logging-enable" class="bg-blue-500 hover:bg-blue-700 text-white px-1 rounded">Enable libp2p Logging</button>
-          <button id="button-logging-disable" class="bg-red-500 hover:bg-red-700 text-white px-1 rounded">Disable libp2p Logging</button>
-        </li>
-      </ul>
 
       <section class="my-4">
         <h2 class="font-bold text-xl text-blue-600 mb-2">Node</h2>
@@ -86,11 +57,6 @@
 
         <ul class="list-disc list-inside ml-4" id="output-peer-details"></ul>
       </section>
-
-      <h2 class="font-bold text-xl text-blue-600 mb-2">Output</h2>
-      <pre class="bg-gray-100 p-4 rounded shadow-inner" id="output"></pre>
-
-      <hr class="my-6 border-gray-300" />
     </main>
   </body>
 </html>

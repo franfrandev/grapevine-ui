@@ -9,3 +9,4 @@ export const bootstrapPeers = [
 ]
 
 export const PUBSUB_PEER_DISCOVERY = 'browser-peer-discovery'
+export const GET_PEERS_PROTOCOL = '/grapevine/peers/1.0.0'

@@ -6,8 +6,8 @@ import {
     Circuit,
     WebRTCDirect
 } from '@multiformats/multiaddr-matcher'
-import {bootstrapPeers} from './constants.js'
-import {Libp2p} from "libp2p";
+import {bootstrapPeers} from './constants'
+import type {Libp2p} from "libp2p";
 
 export function uint8ArrayStartsWith(buf: Uint8Array, slice: Uint8Array) {
     if (buf.byteLength < slice.byteLength) return false;
@@ -28,12 +28,9 @@ export function getAddresses(libp2p: Libp2p) {
 
 export function getPeerTypes(libp2p: Libp2p) {
     const types = {
-        'Circuit Relay': 0,
         WebRTC: 0,
         'WebRTC Direct': 0,
-        WebSockets: 0,
-        'WebSockets (secure)': 0,
-        WebTransport: 0,
+        'Circuit Relay': 0,
         Other: 0,
     }
 
@@ -45,12 +42,6 @@ export function getPeerTypes(libp2p: Libp2p) {
                 types['WebRTC']++
             } else if (WebRTCDirect.exactMatch(ma)) {
                 types['WebRTC Direct']++
-            } else if (WebSockets.exactMatch(ma)) {
-                types['WebSockets']++
-            } else if (WebSocketsSecure.exactMatch(ma)) {
-                types['WebSockets (secure)']++
-            } else if (WebTransport.exactMatch(ma)) {
-                types['WebTransport']++
             } else if (Circuit.exactMatch(ma)) {
                 types['Circuit Relay']++
             } else {
