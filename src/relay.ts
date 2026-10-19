@@ -44,18 +44,20 @@ export class Relay {
         });
     }
 
+    getRandomPeer(): [PeerId, Multiaddr] {
+        let items = Array.from(this.announcedPeers.cache.entries());
+        return items[Math.floor(Math.random() * items.length)];
+    }
+
     async choosePeers(requestingPeer?: PeerId, count = 5): Promise<Multiaddr[]> {
         const mhs: Multiaddr[] = [];
         const entries = Array.from(this.announcedPeers.cache.entries());
 
-        for (let i = entries.length - 1; i >= 0; i--) {
-            const [peerId, mh] = entries[i];
+        for (let i = 0; i < entries.length && mhs.length < count; i++) {
+            const [peerId, mh] = this.getRandomPeer()
 
             if (requestingPeer) {
                 if (peerId) {
-                    if (typeof (peerId as any).equals === 'function' && (peerId as any).equals(requestingPeer)) {
-                        continue;
-                    }
                     if (peerId.toString() === requestingPeer.toString()) {
                         continue;
                     }
@@ -67,9 +69,6 @@ export class Relay {
             }
 
             mhs.push(mh);
-            if (mhs.length >= count) {
-                break;
-            }
         }
 
         return mhs;
