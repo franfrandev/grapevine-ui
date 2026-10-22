@@ -1,0 +1,40 @@
+{
+	"name": "grapevine-ui",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-auto": "^8.0.0",
+		"@sveltejs/kit": "^3.0.0",
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"svelte": "^5.57.1",
+		"svelte-check": "^4.6.0",
+		"typescript": "^6.0.3",
+		"vite": "^8.3.0"
+	},
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	},
+	"dependencies": {
+		"@chainsafe/libp2p-noise": "^17.0.0",
+		"@chainsafe/libp2p-yamux": "^8.0.1",
+		"@libp2p/bootstrap": "^12.0.36",
+		"@libp2p/circuit-relay-v2": "^4.2.17",
+		"@libp2p/gossipsub": "^17.2.1",
+		"@libp2p/identify": "^4.1.18",
+		"@libp2p/webrtc": "^7.0.2",
+		"@libp2p/websockets": "^10.1.25",
+		"@libp2p/webtransport": "^6.0.44",
+		"libp2p": "^3.5.1",
+		"rtp.js": "^0.15.7"
+	}
+}
