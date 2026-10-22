@@ -159,6 +159,9 @@ export class WebPeer {
             sourcePeerId: stations[topic].peerId, currentlyPlaying: currentlyPlaying
         }
 
+        const addr = multiaddr(stations[topic].addr)
+        await this.libp2p.dial(addr)
+
         document.addEventListener('touchstart', this.fixAudioContext)
         document.addEventListener('touchend', this.fixAudioContext)
 
